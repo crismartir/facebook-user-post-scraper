@@ -23,6 +23,17 @@ Adotar **shared DB/schema com `tenant_id` obrigatório em toda tabela de negóci
 - **Defesa em profundidade**: a camada de aplicação (use cases) também filtra explicitamente por `tenant_id` — nunca depende só da RLS. Um guard NestJS rejeita qualquer requisição cujo `tenant_id` do token não bata com o recurso solicitado.
 - Índices compostos `(tenant_id, ...)` em todas as tabelas de alto volume.
 
+## Addendum (Fase 0 — implementação)
+
+Durante a implementação da Fase 0 surgiu um problema de bootstrap: `refresh_tokens` são localizados por um segredo opaco (hash do token) e, no login, o `tenant_id` do usuário ainda não é conhecido no momento da consulta — nos dois casos, não há um `tenant_id` de sessão para configurar antes da query, então uma policy RLS estrita bloquearia até o próprio dono legítimo.
+
+Refinamento adotado, implementado em `prisma/migrations/*_enable_rls`:
+
+- **`memberships`** recebe uma policy dupla: uma linha é visível se `tenant_id` bate com `app.tenant_id` **OU** se `user_id` bate com `app.user_id` (uma segunda variável de sessão, fixada via `TenantPrismaService.runAsUser`). Isso resolve o bootstrap do login (listar as próprias memberships antes de escolher um tenant) sem nunca expor a membership de outro usuário.
+- **`sessions` e `refresh_tokens` não recebem RLS** nesta fase. Mantêm a coluna `tenant_id` (para índices e verificação explícita no código), mas o isolamento é garantido pela imprevisibilidade do segredo (hash de 48 bytes aleatórios, consultado sempre por igualdade exata) mais checagem explícita de posse (`session.userId`, `session.revokedAt`) em `AuthService`, não por RLS. Tabelas de domínio a partir da Fase 1 (kpis, documents, conversations etc.) seguem a policy simples de `tenant_id`, sem essa exceção — ela é específica do problema de bootstrap de autenticação.
+
+Isso não enfraquece o modelo: é a mesma classe de garantia usada por qualquer sistema de sessão baseado em token opaco (o acesso já pressupõe posse do segredo).
+
 ## Consequências
 
 - Positivo: uma única migração, um único pool de conexões, custo mínimo, escala a milhares de tenants em um único Postgres bem dimensionado (com PgBouncer).
