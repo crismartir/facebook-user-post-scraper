@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-typecheck-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @opfy-board/api exec prisma generate
+      - run: pnpm --filter @opfy-board/api lint
+      - run: pnpm --filter @opfy-board/api exec tsc --noEmit -p tsconfig.json
+      - run: pnpm --filter @opfy-board/api build
+      - run: pnpm --filter @opfy-board/web lint
+      - run: pnpm --filter @opfy-board/web build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+
+  test-api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: opfy
+          POSTGRES_PASSWORD: opfy
+          POSTGRES_DB: opfy_board_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opfy"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://opfy:opfy@localhost:5432/opfy_board_test?schema=public
+      JWT_ACCESS_SECRET: ci-access-secret
+      JWT_ACCESS_TTL: 15m
+      REFRESH_TOKEN_HASH_SECRET: ci-refresh-secret
+      REFRESH_TOKEN_TTL_DAYS: 30
+      COOKIE_SECURE: "false"
+      WEB_ORIGIN: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @opfy-board/api exec prisma generate
+      - run: pnpm --filter @opfy-board/api exec prisma migrate deploy
+      - run: pnpm --filter @opfy-board/api test
+      - run: pnpm --filter @opfy-board/api test:e2e

@@ -1,0 +1,22 @@
+# Ambiente de desenvolvimento (deploy-strategy.md): só o Postgres roda em
+# container. A API e o Web rodam localmente via `pnpm dev:api` / `pnpm dev:web`
+# com hot reload, apontando para este banco.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: opfy
+      POSTGRES_PASSWORD: opfy
+      POSTGRES_DB: opfy_board
+    ports:
+      - "5432:5432"
+    volumes:
+      - opfy_postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opfy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  opfy_postgres_dev_data:

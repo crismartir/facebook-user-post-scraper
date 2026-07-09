@@ -1,0 +1,17 @@
+{
+  "name": "opfy-board",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "pnpm -r lint",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "dev:api": "pnpm --filter @opfy-board/api start:dev",
+    "dev:web": "pnpm --filter @opfy-board/web dev"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}
